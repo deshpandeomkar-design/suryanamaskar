@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Surya Namaskar Counter</title>
+    <!-- Load MediaPipe and TensorFlow.js AI models -->
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 20px; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        video, canvas { width: 100%; border-radius: 8px; transform: scaleX(-1); }
+        .box { position: relative; margin-top: 15px; }
+        canvas { position: absolute; top: 0; left: 0; }
+        select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
+        button { background: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; }
+        #counter { font-size: 48px; font-weight: bold; color: #007bff; margin: 10px 0; }
+        #status { font-size: 18px; color: #555; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>AI Surya Namaskar Counter</h2>
+    
+    <label for="userSelect"><b>Who is practicing?</b></label>
+    <select id="userSelect">
+        <option value="Player 1">Player 1</option>
+        <option value="Player 2">Player 2</option>
+        <option value="Player 3">Player 3</option>
+    </select>
+
+    <div class="box">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="output"></canvas>
+    </div>
+
+    <div id="counter">0</div>
+    <div id="status">Loading AI Model...</div>
+    <button id="sendBtn" disabled>Submit Workout to Leaderboard</button>
+</div>
+
+<script>
+    // PASTE YOUR MAKE.COM WEBHOOK URL BETWEEN THE QUOTES BELOW:
+    const MAKE_WEBHOOK_URL = "3xhk8jfx4r2mnq2o9a4vgolcvx2nwjq2@hook.eu1.make.com";
+
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('output');
+    const ctx = canvas.getContext('2d');
+    const counterDiv = document.getElementById('counter');
+    const statusDiv = document.getElementById('status');
+    const sendBtn = document.getElementById('sendBtn');
+    const userSelect = document.getElementById('userSelect');
+
+    let detector;
+    let count = 0;
+    let stage = "standing"; // Track sequence states: standing -> bending -> standing
+
+    async function setupCamera() {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+        video.srcObject = stream;
+        return new Promise((resolve) => { video.onloadedmetadata = () => { resolve(video); }; });
+    }
+
+    async function loadModel() {
+        statusDiv.innerText = "Initializing Camera & AI...";
+        await setupCamera();
+        video.play();
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+        });
+        
+        statusDiv.innerText = "AI Active! Step back so your full body is visible.";
+        sendBtn.disabled = false;
+        detectPose();
+    }
+
+    async function detectPose() {
+        const poses = await detector.estimatePoses(video);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (poses.length > 0) {
+            const keypoints = poses[0].keypoints;
+            
+            // Extract key joint markers
+            const nose = keypoints.find(k => k.name === 'nose');
+            const leftHip = keypoints.find(k => k.name === 'left_hip');
+            const leftKnee = keypoints.find(k => k.name === 'left_knee');
+
+            // Simplistic tracking logic: Vertical relationship between nose and hips
+            if (nose && leftHip && nose.score > 0.4 && leftHip.score > 0.4) {
+                const verticalDistance = leftHip.y - nose.y;
+
+                // If nose drops close to hip level, user is bending down (Padahastasana / Ashwa Sanchalanasana)
+                if (verticalDistance < 120 && stage === "standing") {
+                    stage = "bending";
+                    statusDiv.innerText = "Down Position Detected";
+                }
+                
+                // When user stands completely back up straight
+                if (verticalDistance > 200 && stage === "bending") {
+                    stage = "standing";
+                    count++;
+                    counterDiv.innerText = count;
+                    statusDiv.innerText = "Round Completed!";
+                }
+            }
+
+            // Draw skeletal dots to show AI visual feedback
+            keypoints.forEach(kp => {
+                if (kp.score > 0.4) {
+                    ctx.beginPath();
+                    ctx.arc(canvas.width - kp.x, kp.y, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#00ff00";
+                    ctx.fill();
+                }
+            });
+        }
+        requestAnimationFrame(detectPose);
+    }
+
+    // Send final count data to Make.com -> Google Sheets
+    sendBtn.addEventListener('click', async () => {
+        if(count === 0) { alert("Complete at least 1 rep first!"); return; }
+        sendBtn.disabled = true;
+        statusDiv.innerText = "Sending scores...";
+
+        try {
+            await fetch(MAKE_WEBHOOK_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: userSelect.value,
+                    reps: count,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            alert("Score saved successfully!");
+            count = 0;
+            counterDiv.innerText = count;
+            statusDiv.innerText = "Ready for next user.";
+        } catch (err) {
+            alert("Error saving score. Try again.");
+        }
+        sendBtn.disabled = false;
+    });
+
+    loadModel();
+</script>
+</body>
+</html>
