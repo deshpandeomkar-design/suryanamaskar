@@ -87,29 +87,39 @@
         if (poses.length > 0) {
             const keypoints = poses[0].keypoints;
             
-            // Extract key joint markers
+                      // Extract key joint markers
             const nose = keypoints.find(k => k.name === 'nose');
             const leftHip = keypoints.find(k => k.name === 'left_hip');
-            const leftKnee = keypoints.find(k => k.name === 'left_knee');
+            const rightHip = keypoints.find(k => k.name === 'right_hip');
 
-            // Simplistic tracking logic: Vertical relationship between nose and hips
-            if (nose && leftHip && nose.score > 0.4 && leftHip.score > 0.4) {
-                const verticalDistance = leftHip.y - nose.y;
+            // Use whichever hip is more visible
+            const hip = (leftHip && leftHip.score > 0.3) ? leftHip : rightHip;
 
-                // If nose drops close to hip level, user is bending down (Padahastasana / Ashwa Sanchalanasana)
-                if (verticalDistance < 120 && stage === "standing") {
+            if (nose && hip && nose.score > 0.3 && hip.score > 0.3) {
+                const verticalDistance = Math.abs(hip.y - nose.y);
+
+                // DEBUG LOG: Shows actual numbers in your browser console to see what is happening
+                console.log("Current Distance:", verticalDistance, "Stage:", stage);
+
+                // 1. Detect Bending Down (Padahastasana / Plank)
+                // When you bend, your nose gets closer to your hip level
+                if (verticalDistance < 70 && stage === "standing") {
                     stage = "bending";
-                    statusDiv.innerText = "Down Position Detected";
+                    statusDiv.innerText = "Down Position Detected! Now stand up straight.";
+                    statusDiv.style.color = "#ffc107";
                 }
                 
-                // When user stands completely back up straight
-                if (verticalDistance > 200 && stage === "bending") {
+                // 2. Detect Standing Back Up Straight
+                // When you stand completely back up, the distance expands
+                if (verticalDistance > 130 && stage === "bending") {
                     stage = "standing";
                     count++;
                     counterDiv.innerText = count;
-                    statusDiv.innerText = "Round Completed!";
+                    statusDiv.innerText = "Round Completed! Great job.";
+                    statusDiv.style.color = "#28a745";
                 }
             }
+
 
             // Draw skeletal dots to show AI visual feedback
             keypoints.forEach(kp => {
