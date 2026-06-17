@@ -56,76 +56,80 @@
 
     let detector;
     let count = 0;
-    let stage = "standing"; // Track sequence states: standing -> bending -> standing
+    let stage = "standing";
 
     async function setupCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
-        video.srcObject = stream;
-        return new Promise((resolve) => { video.onloadedmetadata = () => { resolve(video); }; });
+        statusDiv.innerText = "Requesting camera permission...";
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: "user", // Forces the front-facing selfie camera
+                    width: { ideal: 640 }, 
+                    height: { ideal: 480 } 
+                }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+            return new Promise((resolve) => { video.onloadedmetadata = () => resolve(video); });
+        } catch (err) {
+            statusDiv.innerText = "Camera Access Error! Please check browser permissions.";
+            console.error(err);
+        }
     }
 
     async function loadModel() {
-        statusDiv.innerText = "Initializing Camera & AI...";
         await setupCamera();
         video.play();
+        
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
+        statusDiv.innerText = "Downloading AI weights (1-2MB)...";
+        
+        // Mobile-optimised configuration flag
         detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+            enableSmoothing: true
         });
         
-        statusDiv.innerText = "AI Active! Step back so your full body is visible.";
+        statusDiv.innerText = "AI Active! Step back to start tracking.";
         sendBtn.disabled = false;
         detectPose();
     }
 
     async function detectPose() {
+        if (!detector) return;
         const poses = await detector.estimatePoses(video);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (poses.length > 0) {
-            const keypoints = poses[0].keypoints;
-            
-                      // Extract key joint markers
+            const keypoints = poses.keypoints;
             const nose = keypoints.find(k => k.name === 'nose');
             const leftHip = keypoints.find(k => k.name === 'left_hip');
             const rightHip = keypoints.find(k => k.name === 'right_hip');
-
-            // Use whichever hip is more visible
             const hip = (leftHip && leftHip.score > 0.3) ? leftHip : rightHip;
 
             if (nose && hip && nose.score > 0.3 && hip.score > 0.3) {
                 const verticalDistance = Math.abs(hip.y - nose.y);
 
-                // DEBUG LOG: Shows actual numbers in your browser console to see what is happening
-                console.log("Current Distance:", verticalDistance, "Stage:", stage);
-
-                // 1. Detect Bending Down (Padahastasana / Plank)
-                // When you bend, your nose gets closer to your hip level
-                if (verticalDistance < 70 && stage === "standing") {
+                // Adjusted tracking logic thresholds for mobile screen ratios
+                if (verticalDistance < 80 && stage === "standing") {
                     stage = "bending";
-                    statusDiv.innerText = "Down Position Detected! Now stand up straight.";
-                    statusDiv.style.color = "#ffc107";
+                    statusDiv.innerText = "Down Position Detected!";
                 }
                 
-                // 2. Detect Standing Back Up Straight
-                // When you stand completely back up, the distance expands
-                if (verticalDistance > 130 && stage === "bending") {
+                if (verticalDistance > 140 && stage === "bending") {
                     stage = "standing";
                     count++;
                     counterDiv.innerText = count;
-                    statusDiv.innerText = "Round Completed! Great job.";
-                    statusDiv.style.color = "#28a745";
+                    statusDiv.innerText = "Round Counted!";
                 }
             }
 
-
-            // Draw skeletal dots to show AI visual feedback
             keypoints.forEach(kp => {
-                if (kp.score > 0.4) {
+                if (kp.score > 0.3) {
                     ctx.beginPath();
-                    ctx.arc(canvas.width - kp.x, kp.y, 5, 0, 2 * Math.PI);
+                    ctx.arc(canvas.width - kp.x, kp.y, 4, 0, 2 * Math.PI);
                     ctx.fillStyle = "#00ff00";
                     ctx.fill();
                 }
@@ -134,12 +138,10 @@
         requestAnimationFrame(detectPose);
     }
 
-    // Send final count data to Make.com -> Google Sheets
     sendBtn.addEventListener('click', async () => {
-        if(count === 0) { alert("Complete at least 1 rep first!"); return; }
+        if(count === 0) { alert("Do at least 1 rep first!"); return; }
         sendBtn.disabled = true;
-        statusDiv.innerText = "Sending scores...";
-
+        statusDiv.innerText = "Saving score...";
         try {
             await fetch(MAKE_WEBHOOK_URL, {
                 method: "POST",
@@ -153,13 +155,15 @@
             alert("Score saved successfully!");
             count = 0;
             counterDiv.innerText = count;
-            statusDiv.innerText = "Ready for next user.";
+            statusDiv.innerText = "Ready for next player.";
         } catch (err) {
-            alert("Error saving score. Try again.");
+            alert("Network error. Try again.");
         }
         sendBtn.disabled = false;
     });
 
+    loadModel();
+</script>
     loadModel();
 </script>
 </body>
