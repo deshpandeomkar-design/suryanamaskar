@@ -2,46 +2,43 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Surya Namaskar Counter</title>
-    <!-- Load MediaPipe and TensorFlow.js AI models -->
-     <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
-    <script src="https://jsdelivr.net"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Surya Namaskar Tracker</title>
+    <!-- Ultra-reliable Direct MediaPipe Pose Libraries -->
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
+    <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 20px; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        video, canvas { width: 100%; border-radius: 8px; transform: scaleX(-1); }
-        .box { position: relative; margin-top: 15px; }
-        canvas { position: absolute; top: 0; left: 0; }
-        select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #f8f9fa; margin: 0; padding: 15px; }
+        .container { max-width: 450px; margin: auto; background: white; padding: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .video-box { position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #000; line-height: 0; }
+        video { width: 100%; height: auto; transform: scaleX(-1); }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
+        select, button { width: 100%; padding: 14px; margin: 8px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; }
         button { background: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; }
-        #counter { font-size: 48px; font-weight: bold; color: #007bff; margin: 10px 0; }
-        #status { font-size: 18px; color: #555; font-style: italic; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #counter { font-size: 56px; font-weight: 800; color: #007bff; margin: 5px 0; }
+        #status { font-size: 16px; color: #495057; font-weight: 500; min-height: 24px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>AI Surya Namaskar Counter</h2>
+    <h3 style="margin-top:0; color:#333;">AI Surya Namaskar Counter</h3>
     
-    <label for="userSelect"><b>Who is practicing?</b></label>
     <select id="userSelect">
         <option value="Player 1">Player 1</option>
         <option value="Player 2">Player 2</option>
         <option value="Player 3">Player 3</option>
     </select>
 
-    <div class="box">
-        <video id="webcam" autoplay playsinline muted></video>
+    <div class="video-box">
+        <video id="webcam" playsinline muted></video>
         <canvas id="output"></canvas>
     </div>
 
     <div id="counter">0</div>
-    <div id="status">Loading AI Model...</div>
-    <button id="sendBtn" disabled>Submit Workout to Leaderboard</button>
+    <div id="status">Starting camera application...</div>
+    <button id="sendBtn" disabled>Submit Workout</button>
 </div>
 
 <script>
@@ -56,95 +53,94 @@
     const sendBtn = document.getElementById('sendBtn');
     const userSelect = document.getElementById('userSelect');
 
-    let detector;
     let count = 0;
     let stage = "standing";
 
-    async function setupCamera() {
-        statusDiv.innerText = "Requesting camera permission...";
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: "user", // Forces the front-facing selfie camera
-                    width: { ideal: 640 }, 
-                    height: { ideal: 480 } 
-                }, 
-                audio: false 
-            });
-            video.srcObject = stream;
-            return new Promise((resolve) => { video.onloadedmetadata = () => resolve(video); });
-        } catch (err) {
-            statusDiv.innerText = "Camera Access Error! Please check browser permissions.";
-            console.error(err);
-        }
-    }
+    // 1. Initialize Pure MediaPipe Pose
+    const pose = new Pose({
+        locateFile: (file) => `https://jsdelivr.net{file}`
+    });
 
-    async function loadModel() {
-        await setupCamera();
-        video.play();
-        
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+    pose.setOptions({
+        modelComplexity: 0, // 0 = Light speed tracking optimized specifically for mobile chips
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
 
-        statusDiv.innerText = "Loading Mobile AI Engine...";
-        
-        // Swapping to a highly reliable MediaPipe runtime configuration
-        detector = await poseDetection.createDetector(poseDetection.SupportedModels.BlazePose, {
-            runtime: 'mediapipe',
-            modelType: 'lite', // Uses the ultra-small file footprint
-            solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/pose'
-        });
-        
-        statusDiv.innerText = "AI Active! Step back to start tracking.";
-        sendBtn.disabled = false;
-        detectPose();
-    }
-
-    async function detectPose() {
-        if (!detector) return;
-        const poses = await detector.estimatePoses(video);
+    // 2. Continuous AI Calculations
+    pose.onResults((results) => {
+        // Clear canvas overlay
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Match canvas dimensions to the running stream size dynamically
+        if (canvas.width !== video.videoWidth) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            statusDiv.innerText = "AI Active! Step back to begin.";
+            sendBtn.disabled = false;
+        }
 
-        if (poses.length > 0) {
-            const keypoints = poses.keypoints;
-            const nose = keypoints.find(k => k.name === 'nose');
-            const leftHip = keypoints.find(k => k.name === 'left_hip');
-            const rightHip = keypoints.find(k => k.name === 'right_hip');
-            const hip = (leftHip && leftHip.score > 0.3) ? leftHip : rightHip;
+        if (results.poseLandmarks) {
+            const landmarks = results.poseLandmarks;
+            
+            // Extract core coordinates (Nose = 0, Left Hip = 24, Right Hip = 23)
+            const nose = landmarks[0];
+            const leftHip = landmarks[24];
+            const rightHip = landmarks[23];
+            const hip = (leftHip && leftHip.visibility > 0.5) ? leftHip : rightHip;
 
-            if (nose && hip && nose.score > 0.3 && hip.score > 0.3) {
+            if (nose && hip && nose.visibility > 0.5 && hip.visibility > 0.5) {
+                // Calculate relative vertical displacement proportional to frame height
                 const verticalDistance = Math.abs(hip.y - nose.y);
 
-                // Adjusted tracking logic thresholds for mobile screen ratios
-                if (verticalDistance < 80 && stage === "standing") {
+                // Tracking Sequence States
+                if (verticalDistance < 0.18 && stage === "standing") {
                     stage = "bending";
-                    statusDiv.innerText = "Down Position Detected!";
+                    statusDiv.innerText = "Down Position Detected! Now stand straight.";
+                    statusDiv.style.color = "#d39e00";
                 }
                 
-                if (verticalDistance > 140 && stage === "bending") {
+                if (verticalDistance > 0.32 && stage === "bending") {
                     stage = "standing";
                     count++;
                     counterDiv.innerText = count;
-                    statusDiv.innerText = "Round Counted!";
+                    statusDiv.innerText = "Round Tracked! Keep it up.";
+                    statusDiv.style.color = "#28a745";
                 }
             }
 
-            keypoints.forEach(kp => {
-                if (kp.score > 0.3) {
+            // Draw tracking indicator dots on screen
+            results.poseLandmarks.forEach(lm => {
+                if (lm.visibility > 0.5) {
                     ctx.beginPath();
-                    ctx.arc(canvas.width - kp.x, kp.y, 4, 0, 2 * Math.PI);
+                    ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 4, 0, 2 * Math.PI);
                     ctx.fillStyle = "#00ff00";
                     ctx.fill();
                 }
             });
         }
-        requestAnimationFrame(detectPose);
-    }
+    });
 
+    // 3. Native Camera Control
+    const camera = new Camera(video, {
+        onFrame: async () => {
+            await pose.send({ image: video });
+        },
+        width: 640,
+        height: 480
+    });
+    
+    statusDiv.innerText = "Initializing direct camera stream...";
+    camera.start().catch(err => {
+        statusDiv.innerText = "Camera error. Grant permissions and refresh.";
+    });
+
+    // 4. Webhook Trigger
     sendBtn.addEventListener('click', async () => {
-        if(count === 0) { alert("Do at least 1 rep first!"); return; }
+        if(count === 0) { alert("Complete a round first!"); return; }
         sendBtn.disabled = true;
-        statusDiv.innerText = "Saving score...";
+        statusDiv.innerText = "Saving data package...";
         try {
             await fetch(MAKE_WEBHOOK_URL, {
                 method: "POST",
@@ -155,19 +151,16 @@
                     timestamp: new Date().toISOString()
                 })
             });
-            alert("Score saved successfully!");
+            alert("Score successfully synced!");
             count = 0;
             counterDiv.innerText = count;
-            statusDiv.innerText = "Ready for next player.";
+            statusDiv.innerText = "Ready for next person.";
+            statusDiv.style.color = "#495057";
         } catch (err) {
-            alert("Network error. Try again.");
+            alert("Database synchronization failed.");
         }
         sendBtn.disabled = false;
     });
-
-    loadModel();
-</script>
-    loadModel();
 </script>
 </body>
 </html>
