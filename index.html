@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Surya Namaskar Counter</title>
     <!-- Load MediaPipe and TensorFlow.js AI models -->
+     <script src="https://jsdelivr.net"></script>
     <script src="https://jsdelivr.net"></script>
     <script src="https://jsdelivr.net"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #f4f6f9; margin: 0; padding: 20px; }
@@ -84,12 +86,13 @@
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        statusDiv.innerText = "Downloading AI weights (1-2MB)...";
+        statusDiv.innerText = "Loading Mobile AI Engine...";
         
-        // Mobile-optimised configuration flag
-        detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-            enableSmoothing: true
+        // Swapping to a highly reliable MediaPipe runtime configuration
+        detector = await poseDetection.createDetector(poseDetection.SupportedModels.BlazePose, {
+            runtime: 'mediapipe',
+            modelType: 'lite', // Uses the ultra-small file footprint
+            solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/pose'
         });
         
         statusDiv.innerText = "AI Active! Step back to start tracking.";
